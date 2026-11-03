@@ -233,7 +233,50 @@ t+9m   user (from laptop this time) resolves approval       → seq 109
 t+11m  task.completed + message with itinerary card          → seq 110 → push
 ```
 
-### 4.5 Versioning, auth, errors
+### 4.5 Memory, topics, and context assembly
+
+**Principle: the event log is not the prompt.** The log is the UX and audit artifact (what clients render, what proves a purchase happened). What the agent "knows" at the start of a turn is produced by a separate **context assembler**, and what it knows long-term lives in a **memory store** with its own, longer lifecycle. This decouples three concerns that otherwise fight each other: display history, model context, and retention.
+
+**Retention:** raw events expire after **~1 year** (clients handle this via the existing `OUT_OF_RANGE`/`ResyncRequired` path — expiry is just planned truncation from the log's tail). Two exceptions: consequential-action events (payments, approvals, sent emails) are archived to a compliance store before expiry, and memory extraction (below) runs continuously, so nothing the agent should remember depends on the raw event surviving.
+
+**Topic segmentation (implicit threads).** The UX stays mono-thread — users should never be forced to file messages into threads. Internally, the fast lane (which already touches every inbound message within ~1s) also emits a segmentation judgment: *continuation of current segment* vs *new topic*, using cheap signals (time gap, embedding similarity to the active segment, explicit markers like "new thing:" or "btw"). Segments are server-side metadata on events (`segment_id`), invisible to users but available to clients that want subtle visual dividers later.
+
+**Memory tiers**, extracted asynchronously by a background worker as segments close:
+
+1. **Episodic** — a summary per closed segment ("Nov 3: booked ANA 212 to Tokyo, $848, window seat"), embedded for retrieval. This *is* the compaction: the raw events can expire; the episode survives.
+2. **Semantic / profile** — durable facts and preferences distilled across episodes ("prefers window seats", "partner's name is J", "budget-sensitive on flights"). Slowly-changing, user-visible and user-editable (see memory RPCs below — an agent that remembers wrong things and can't be corrected is a product killer).
+3. **State** — open tasks, standing commitments ("remind me every Sunday"), unresolved approvals. Never summarized away; expires only on completion.
+
+**Context assembly per main-lane turn** (answers "when to include previous turn context"):
+
+```
+new message burst
+  → fast lane: same segment or new topic?
+  → assembler builds the prompt from:
+      • current segment verbatim (if continuation) — or NOT (if new topic)
+      • profile memory (always; it's small)
+      • top-k episodic memories retrieved against the burst (always —
+        this is how a "new topic" that secretly relates to last month's
+        conversation still gets its context)
+      • state memory relevant to the burst (open tasks it might reference)
+  → main-lane turn runs; the agent also has a search_memory tool to pull
+    more mid-turn (lazy retrieval as the escape hatch for misclassification)
+```
+
+The `search_memory` tool is the safety valve that makes the segmentation decision low-stakes: a wrong "new topic" call costs one tool round-trip, not a lost thread. Err toward excluding stale context (topic bleed reads as creepy/confused; a retrieval reads as "let me check — right, the Tokyo trip").
+
+**Memory RPCs** (user-facing control, appended to `TaskService`'s sibling):
+
+```protobuf
+service MemoryService {
+  rpc ListMemories(ListMemoriesRequest) returns (ListMemoriesResponse); // profile + state tiers
+  rpc UpdateMemory(UpdateMemoryRequest) returns (Memory);               // user edits a fact
+  rpc DeleteMemory(DeleteMemoryRequest) returns (google.protobuf.Empty);
+  rpc ForgetSegment(ForgetSegmentRequest) returns (google.protobuf.Empty); // "forget that conversation"
+}
+```
+
+### 4.6 Versioning, auth, errors
 
 - **Versioning:** proto package (`mira.v1` → `mira.v2`); within v1, evolve by adding fields and new `oneof payload` arms. Protobuf makes unknown `oneof` arms land in the "not set" case — clients must render an event whose payload they don't recognize as a generic "activity" row (using a parallel `string type_hint` field) rather than drop it. Never renumber or reuse field tags.
 - **Auth:** OAuth2/OIDC; access token in per-RPC `authorization` metadata over TLS. Per-device tokens so a lost device can be revoked without ending the relationship thread; scopes per connected integration (email, payments…).
@@ -251,7 +294,8 @@ t+11m  task.completed + message with itinerary card          → seq 110 → pus
 
 ## 6. Open questions for review
 
-1. **Retention:** is the main thread truly forever, or windowed with server-side memory summarization? (Impacts cursor/truncation design — `resync_required` assumes truncation is possible.)
-2. **Side threads:** expose `kind:"side"` conversations in v1, or keep strictly one thread and render tasks as inline cards only?
+1. ~~**Retention:** forever vs windowed?~~ **Resolved:** raw events TTL ~1 year; durable knowledge lives in the memory system (episodic/profile/state tiers), extracted before expiry; consequential-action events archived for compliance. See §4.5.
+2. **Side threads:** expose `kind:"side"` conversations in v1, or keep strictly one thread and render tasks as inline cards only? (§4.5's implicit segments reduce the pressure for explicit side threads — lean toward inline cards only for v1.)
 3. Should the **fast lane** ever produce text replies, or emoji/receipts only? (Text risks contradicting the main lane.)
 4. Public developer API from day one, or first-party clients only? (Affects how much of the Task model we freeze now.)
+5. **Segmentation tuning:** what time-gap and similarity thresholds mark a new segment, and should segment boundaries ever be user-visible (subtle dividers) or purely internal?
