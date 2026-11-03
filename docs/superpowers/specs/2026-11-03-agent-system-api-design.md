@@ -297,6 +297,20 @@ Reviewed against three production/next-gen protocol shapes for long-lived assist
 
 **Adopted from the review:** (a) in-stream cumulative delivery ACKs — extend `ClientSignal` with periodic `acked_output_seq` so the server can trim replay buffers and detect zombie streams, not just at Resume; (b) explicitly document that `AppendEvent` never waits on stream handshake (pipelining property); (c) reserve a seam for a future reactive shared **WorkspaceService** (watch/mutate structured state behind an epoch-fenced single writer) for live interactive surfaces — v1 ships static `Card`s only. Also validating: the reviewed next-gen companion product decomposes its runtime into a frontline triage actor (emoji acks), a background task worker, a proactive cron runner, and an offline memory-consolidation actor — near-isomorphic to our two-lane runtime, Tasks, heartbeats, and memory-extraction worker (§4.3, §4.5).
 
+### 4.8 Worked contrast: where the state machine lives
+
+Same failure, both protocols: agent mid-turn, user sends "also under $900" at t4, network drops at t5 (after the bytes leave the device), returns at t8.
+
+**Split (this design):** the client persisted two crash-safe facts — outbox `{client_id:"c-77" → text}` and cursor `106`. At t8 it retries `AppendEvent("c-77")` and opens `StreamEvents Resume{106}` *in parallel*. The server had persisted the write at t5 before the ACK was lost; dedupe returns the original event (seq 109). The replay delivers 107–109; the client matches "c-77" and reconciles its optimistic bubble. Write retry and stream resume never coordinate.
+
+**Single bidi pipe (in-band writes):** the write was `Input(input_seq=4)` and its ack travels on the same dead pipe, so its fate is unknowable until the *session* is re-established. The client must reopen, send `Resume(acked_output_seq=41)`, wait a handshake round-trip for `Resumed(acked_input_seq=?)` to learn whether to replay `Input(4)` — or get `ResumeRequired(CURSOR_EVICTED)` and detour through a unary full read first. The write queues behind the handshake on a cold radio; its exactly-once property rests on resynchronizing session counters.
+
+**The structural difference:** both designs have one authoritative sequencing machine (the server log: `seq` assignment + `client_id` dedupe). The split design surrounds it with two *unilateral* client machines, each reconstructible from durable local facts — no end holds state about the other end's state. The in-band design adds a third machine *co-owned by both ends*: the session (input/output sequence spaces + ack watermarks), which exists only while negotiated, can desynchronize, and therefore needs handshake modes, replay buffers, and eviction fallbacks — TCP's connection machinery rebuilt at the application layer, per client platform.
+
+**Corollary — turn-blindness:** this wire protocol never exposes the agent's turn state. Steering is just another `AppendEvent` (the server inbox decides coalesce / inject / queue, §4.3); elicitation answers are unary `ResolveApproval`; reattach is a cursor. Protocols with in-band writes make frame semantics depend on turn state (input-while-active = steer; legacy designs surface this as client-selected handshake modes like NEW_TURN / STEERING / ELICITATION / RESUME), forcing every client to carry a shadow copy of the turn machine. Keeping the turn machine exclusively server-side is what lets us change coalescing/injection behavior without touching clients.
+
+The bidi session machinery is the right trade when sub-frame latency and ordered full-duplex media are the product (live voice/video); for a chat-shaped durable agent it buys little on a path that is already one idempotent RPC.
+
 ## 5. What we deliberately did NOT include (YAGNI)
 
 - Multi-user / group conversations (mono-thread product; model leaves room via `Participant`).
