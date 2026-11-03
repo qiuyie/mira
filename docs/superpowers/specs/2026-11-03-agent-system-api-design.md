@@ -104,40 +104,95 @@ The **emoji ack** is nothing special — it's just an early, cheap event:
   "payload": { "target": "evt_user_msg", "emoji": "👀" } }
 ```
 
-### 4.2 Endpoints
+### 4.2 gRPC service definition
 
-**Write (client → server), HTTP so it works everywhere including share-sheets and widgets:**
+Transport is **gRPC** (protobuf over HTTP/2). Native clients (iOS/Android/desktop/wearables) use standard gRPC stubs; browsers use **gRPC-Web or the Connect protocol** via an Envoy/Connect gateway — see the cross-platform notes below. Package is versioned: `mira.v1`.
 
+```protobuf
+syntax = "proto3";
+package mira.v1;
+
+service ConversationService {
+  // Write path. Acks INTAKE (<100ms), not agent processing.
+  // Idempotent on client_id (24h window): a retry returns the original event.
+  rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
+
+  // Backfill / gap-fill: finite server stream of persisted events after a cursor.
+  rpc SyncEvents(SyncEventsRequest) returns (stream Event);
+
+  // Live fan-out: one long-lived bidi stream per device, all conversations.
+  //   server → client: Event frames (incl. ephemeral typing/presence)
+  //   client → server: cheap ephemeral signals (typing, receipts, presence)
+  // Resume by opening a new stream with the last seen cursor.
+  rpc StreamEvents(stream ClientSignal) returns (stream Event);
+}
+
+service TaskService {
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+  rpc GetTask(GetTaskRequest) returns (Task);          // status, plan, step log, artifacts
+  rpc WatchTask(GetTaskRequest) returns (stream Task); // live progress for a task drawer UI
+  rpc CancelTask(CancelTaskRequest) returns (Task);
+  rpc SteerTask(SteerTaskRequest) returns (Task);      // mid-flight instruction, no cancel
+  rpc ResolveApproval(ResolveApprovalRequest) returns (Event);
+}
+
+message AppendEventRequest {
+  string conversation_id = 1;
+  string client_id = 2;          // client-generated idempotency key (required)
+  EventBody body = 3;            // type + payload (oneof below)
+}
+message AppendEventResponse {
+  Event event = 1;               // server-assigned id, seq, timestamps
+}
+
+message SyncEventsRequest {
+  string conversation_id = 1;
+  int64 after_seq = 2;
+  int32 limit = 3;               // server caps; stream ends when caught up
+}
+
+message Event {
+  string id = 1;
+  int64 seq = 2;                 // monotonic per conversation — ordering & sync cursor
+  string conversation_id = 3;
+  Sender sender = 4;             // USER / AGENT / SYSTEM + principal id
+  string client_id = 5;
+  string reply_to = 6;
+  google.protobuf.Timestamp created_at = 7;
+  bool ephemeral = 8;            // typing/presence: fanned out live, never persisted
+  oneof payload {                // closed set per proto version; see compat note
+    Message message = 10;
+    Reaction reaction = 11;      // { target_event_id, emoji }
+    Typing typing = 12;
+    Receipt receipt = 13;
+    TaskUpdate task_update = 14; // created / progress / completed / failed
+    ApprovalRequested approval_requested = 15;
+    ApprovalResolved approval_resolved = 16;
+    MessageEdit message_edit = 17;
+    Presence presence = 18;
+  }
+}
+
+message ClientSignal {           // client→server frames on StreamEvents
+  oneof signal {
+    Resume resume = 1;           // { cursor } — first frame on (re)connect
+    Typing typing = 2;
+    Receipt receipt = 3;
+    Presence presence = 4;
+  }
+}
 ```
-POST /v1/conversations/{id}/events
-  body: { client_id, type, payload }
-  → 202 { event: {id, seq, ...} }        // acks intake, NOT agent processing
-```
 
-Returns in <100ms. Duplicate `client_id` within 24h → returns the original event (idempotent). Sending three messages = three POSTs; the server, not the client, decides how the agent consumes them.
+Sending three quick messages = three `AppendEvent` calls; the server, not the client, decides how the agent consumes them. Tasks are *created by the agent*, not the client. Every task state change also emits a `TaskUpdate` event into the conversation, so a client that only implements `StreamEvents` still renders progress cards; `TaskService` exists for rich UI (task drawer, retry, artifacts).
 
-**Sync & realtime (server → client):**
+**gRPC-specific mechanics:**
 
-```
-GET  /v1/conversations/{id}/events?after_seq=48000&limit=200   // backfill / gap-fill
-WS   /v1/stream?cursor=48211                                    // all convs for this user
-  server → client: {event} frames (incl. ephemeral typing/presence)
-  client → server: {type:"receipt"|"typing"|"presence"} (cheap path), ping/pong
-```
+- **Streams are resumable, not durable.** A dropped `StreamEvents` is fine: reconnect, send `Resume{cursor}`, and the server replays from the log (or tells you to `SyncEvents` first if too far behind). Durability lives in the log, never in the connection.
+- **Keepalive tuned for mobile:** client keepalive ~30s with server-enforced minimum; expect and handle `UNAVAILABLE`/`GOAWAY` on network switches — reconnect with jittered backoff is the normal path, not an error path.
+- **Deadlines:** `AppendEvent` 5s, `SyncEvents` 30s; `StreamEvents`/`WatchTask` run long but the server cycles streams (~30min max age) for load-balancing — clients must treat stream end as "reconnect," not failure.
+- **Push:** offline devices get APNs/FCM pushes generated from the same log (server-side rules decide which events are push-worthy); the push payload carries `conversation_id` + `seq` so the app cold-starts straight into `SyncEvents`.
 
-One stream per device, multiplexing all conversations. Resume is trivial: reconnect with the last `seq` you saw; `GET events` fills any gap. SSE fallback (`GET /v1/stream` with `Last-Event-ID`) for web/restricted networks. Offline devices get APNs/FCM pushes generated from the same log (server-side rules decide which events are push-worthy).
-
-**Tasks (durable agent work — this is where the Gemini `background` idea lives):**
-
-```
-GET    /v1/conversations/{id}/tasks?status=running
-GET    /v1/tasks/{task_id}                    // status, plan, step log, artifacts
-POST   /v1/tasks/{task_id}/cancel
-POST   /v1/tasks/{task_id}/steer   { text }   // mid-flight instruction, no cancel
-POST   /v1/approvals/{id}/resolve  { decision: "approve"|"deny", note? }
-```
-
-Tasks are *created by the agent*, not the client — the client just sends messages. Every state change also emits a `task.*` event into the conversation, so a client that only implements the event stream still renders task progress cards; the Task endpoints exist for rich UI (task drawer, retry, artifacts).
+**Cross-platform reality check:** browsers cannot speak native gRPC, and gRPC-Web does not support bidi streaming. The web client therefore uses the degraded-but-equivalent pair: unary `AppendEvent` + server-streaming `SyncEvents`/`StreamEvents` (bidi collapses to a server-stream; the client→server ephemeral signals go over small unary calls, e.g. `rpc PublishSignal(ClientSignal) returns (Empty)` — worth adding for this reason). The Connect protocol (connectrpc.com) is the pragmatic choice for the gateway: one proto, native gRPC for apps, fetch-friendly JSON/HTTP for web, no Envoy translation layer required.
 
 ### 4.3 The agent runtime behind the API (two-lane model)
 
@@ -180,9 +235,10 @@ t+11m  task.completed + message with itinerary card          → seq 110 → pus
 
 ### 4.5 Versioning, auth, errors
 
-- Path-versioned (`/v1`); events carry forward-compatible `type` strings — clients must render unknown types as a generic "activity" row rather than fail.
-- OAuth2/OIDC user auth; per-device tokens so a lost device can be revoked without ending the relationship thread; scopes per connected integration (email, payments…).
-- Errors follow RFC 9457 problem+json; the stream signals irrecoverable cursor gaps (log truncation) with a `resync_required` frame → client refetches tail.
+- **Versioning:** proto package (`mira.v1` → `mira.v2`); within v1, evolve by adding fields and new `oneof payload` arms. Protobuf makes unknown `oneof` arms land in the "not set" case — clients must render an event whose payload they don't recognize as a generic "activity" row (using a parallel `string type_hint` field) rather than drop it. Never renumber or reuse field tags.
+- **Auth:** OAuth2/OIDC; access token in per-RPC `authorization` metadata over TLS. Per-device tokens so a lost device can be revoked without ending the relationship thread; scopes per connected integration (email, payments…).
+- **Errors:** canonical gRPC status codes (`INVALID_ARGUMENT`, `NOT_FOUND`, `RESOURCE_EXHAUSTED`, `FAILED_PRECONDITION` for e.g. resolving an already-resolved approval) with `google.rpc.Status` error details for machine-readable causes. Irrecoverable cursor gaps (log truncation) surface as `OUT_OF_RANGE` with a `ResyncRequired` detail → client refetches the tail via `SyncEvents` from the earliest retained seq.
+- **Retries:** only `AppendEvent` is safely retryable (idempotent on `client_id`); use gRPC retry policy on `UNAVAILABLE` for it, manual reconnect logic for streams.
 
 ---
 
