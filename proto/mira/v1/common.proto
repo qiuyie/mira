@@ -1,0 +1,53 @@
+syntax = "proto3";
+
+package mira.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Who produced an event.
+message Sender {
+  // The kind of principal.
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_USER = 1;   // a human, from one of their devices
+    KIND_AGENT = 2;  // the agent (fast lane or main lane — indistinguishable to clients)
+    KIND_SYSTEM = 3; // platform events (retention notices, policy messages)
+  }
+  Kind kind = 1;
+  // "u123" for users, "mira" for the agent. For users, device_id says which
+  // device originated the event (presence/receipts care; messages don't).
+  string principal_id = 2;
+  string device_id = 3;
+}
+
+// Reference to a content-addressed blob uploaded out-of-band.
+// Blob upload/download is plain HTTPS (resumable, CDN-fronted), not gRPC;
+// events only ever carry references.
+message AttachmentRef {
+  string attachment_id = 1;
+  string mime_type = 2;
+  int64 size_bytes = 3;
+  string sha256 = 4;
+  // Optional preview hints so clients can render before fetching.
+  int32 width = 5;
+  int32 height = 6;
+  string blurhash = 7;
+}
+
+// A conversation. v1 ships exactly one KIND_MAIN per user; the field exists
+// so side threads can be added without a breaking change (open question #2).
+message Conversation {
+  enum Kind {
+    KIND_UNSPECIFIED = 0;
+    KIND_MAIN = 1;
+    KIND_SIDE = 2;
+  }
+  string conversation_id = 1;
+  Kind kind = 2;
+  google.protobuf.Timestamp created_at = 3;
+  // Highest persisted seq — lets a client know how far behind it is
+  // before deciding between SyncEvents and a full resync.
+  int64 latest_seq = 4;
+  // Earliest seq still retained (raw events expire after ~1 year).
+  int64 earliest_retained_seq = 5;
+}

@@ -1,0 +1,135 @@
+syntax = "proto3";
+
+package mira.v1;
+
+import "mira/v1/common.proto";
+import "mira/v1/event.proto";
+
+// The core API. One write RPC, two read paths (finite backfill + live
+// stream). Appending acknowledges INTAKE, never agent processing — the
+// agent's work shows up later as its own events on the stream.
+service ConversationService {
+  // List this user's conversations (v1: exactly one, KIND_MAIN) with their
+  // latest_seq / earliest_retained_seq, so a cold-starting client can decide
+  // how to sync.
+  rpc ListConversations(ListConversationsRequest) returns (ListConversationsResponse);
+
+  // Write path. Target p50 < 100ms. Idempotent on (conversation_id,
+  // client_id) within 24h: a retry returns the originally persisted event.
+  // The ONLY RPC with an automatic gRPC retry policy (on UNAVAILABLE).
+  // Errors: INVALID_ARGUMENT (malformed), PERMISSION_DENIED,
+  // RESOURCE_EXHAUSTED (rate limit; details carry RetryInfo).
+  rpc AppendEvent(AppendEventRequest) returns (AppendEventResponse);
+
+  // Finite backfill: persisted events with seq > after_seq, in order, until
+  // caught up or page-limited. Errors: OUT_OF_RANGE with a ResyncRequired
+  // detail when after_seq < earliest_retained_seq (retention truncation) —
+  // the client then restarts from earliest_retained_seq and treats older
+  // history as expired.
+  rpc SyncEvents(SyncEventsRequest) returns (stream SyncEventsResponse);
+
+  // Live fan-out: one long-lived stream per device covering all of the
+  // user's conversations, including ephemeral typing/presence frames.
+  // First client frame MUST be Resume{cursor}. The server cycles streams
+  // (~30min max age, GOAWAY) for load balancing: stream end is "reconnect
+  // with your cursor", not an error. If the cursor is too far behind for
+  // in-stream replay, the server ends the stream with FAILED_PRECONDITION
+  // and a SyncFirst detail; the client runs SyncEvents, then reconnects.
+  rpc StreamEvents(stream StreamEventsRequest) returns (stream StreamEventsResponse);
+
+  // Unary ephemeral-signal path for transports without bidi streaming
+  // (gRPC-Web browsers). Native clients send signals on StreamEvents.
+  rpc PublishSignal(PublishSignalRequest) returns (PublishSignalResponse);
+}
+
+message ListConversationsRequest {}
+
+message ListConversationsResponse {
+  repeated Conversation conversations = 1;
+}
+
+message AppendEventRequest {
+  string conversation_id = 1;
+  // Client-generated idempotency key (UUIDv7 recommended). Required.
+  string client_id = 2;
+  // Only user-originated payload kinds are accepted here: message, reaction,
+  // receipt, message_edit, message_delete. Task/approval payloads are
+  // rejected with INVALID_ARGUMENT (approvals go through TaskService, task
+  // events are agent-only).
+  EventBody body = 3;
+}
+
+// The client-writable subset of Event's payload.
+message EventBody {
+  string reply_to_event_id = 1;
+  oneof payload {
+    MessagePayload message = 10;
+    ReactionPayload reaction = 11;
+    ReceiptPayload receipt = 12;
+    MessageEditPayload message_edit = 13;
+    MessageDeletePayload message_delete = 14;
+  }
+}
+
+message AppendEventResponse {
+  // The persisted event with server-assigned event_id, seq, created_at.
+  // Clients reconcile their optimistic local echo against this.
+  Event event = 1;
+}
+
+message SyncEventsRequest {
+  string conversation_id = 1;
+  int64 after_seq = 2;
+  // Server caps (e.g. 500). Zero = server default.
+  int32 limit = 3;
+}
+
+message SyncEventsResponse {
+  Event event = 1;
+}
+
+message StreamEventsRequest {
+  ClientSignal signal = 1;
+}
+
+message StreamEventsResponse {
+  Event event = 1;
+}
+
+// Client -> server frames on StreamEvents.
+message ClientSignal {
+  oneof signal {
+    Resume resume = 1;
+    TypingPayload typing = 2;
+    ReceiptPayload receipt = 3;
+    PresencePayload presence = 4;
+  }
+  // Required for typing/receipt/presence (Resume is stream-scoped).
+  string conversation_id = 5;
+}
+
+message Resume {
+  // Highest seq this device has persisted, across all conversations keyed
+  // by conversation_id. Empty map = cold start (server sends nothing until
+  // the client runs SyncEvents; live events still flow).
+  map<string, int64> cursors = 1;
+}
+
+message PublishSignalRequest {
+  ClientSignal signal = 1;
+}
+
+message PublishSignalResponse {}
+
+// google.rpc.Status error details:
+
+// Attached to OUT_OF_RANGE from SyncEvents.
+message ResyncRequired {
+  string conversation_id = 1;
+  int64 earliest_retained_seq = 2;
+}
+
+// Attached to FAILED_PRECONDITION ending StreamEvents.
+message SyncFirst {
+  map<string, int64> latest_seqs = 1; // per conversation_id
+}

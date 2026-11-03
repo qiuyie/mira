@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package mira.v1;
+
+import "google/protobuf/timestamp.proto";
+import "mira/v1/common.proto";
+import "mira/v1/task.proto";
+
+// The universal envelope. The append-only, seq-ordered log of Events IS the
+// conversation; everything clients render and everything the agent did is
+// derivable from it.
+message Event {
+  string event_id = 1;
+  // Monotonic per conversation. Ordering key and sync cursor. Ephemeral
+  // events (typing/presence) are fanned out live with seq = 0 and are never
+  // persisted, so they never create gaps.
+  int64 seq = 2;
+  string conversation_id = 3;
+  Sender sender = 4;
+  // Client-generated idempotency key; empty on agent/system events.
+  string client_id = 5;
+  // Optional: the event this responds to (reactions carry their own target).
+  string reply_to_event_id = 6;
+  google.protobuf.Timestamp created_at = 7;
+  bool ephemeral = 8;
+  // Internal topic segment (see spec §4.5). Server-assigned, may be absent
+  // on ephemeral events. Clients MAY use it for subtle visual dividers.
+  string segment_id = 9;
+  // Snake-case name of the payload arm (e.g. "task_update"). Lets a client
+  // built against an older proto render an unknown payload as a generic
+  // activity row instead of dropping the event.
+  string type_hint = 10;
+
+  oneof payload {
+    MessagePayload message = 20;
+    ReactionPayload reaction = 21;
+    TypingPayload typing = 22;
+    ReceiptPayload receipt = 23;
+    PresencePayload presence = 24;
+    MessageEditPayload message_edit = 25;
+    MessageDeletePayload message_delete = 26;
+    TaskUpdatePayload task_update = 27;
+    ApprovalRequestedPayload approval_requested = 28;
+    ApprovalResolvedPayload approval_resolved = 29;
+  }
+}
+
+// A chat message. Rich content is markdown + attachments + an optional card;
+// cards are how task results render as structured UI (itineraries, receipts).
+message MessagePayload {
+  string markdown = 1;
+  repeated AttachmentRef attachments = 2;
+  Card card = 3;
+}
+
+// Server-defined structured UI. Deliberately a closed, versioned vocabulary
+// (not arbitrary layout): clients ship native renderers per card kind and
+// fall back to `fallback_markdown` for kinds they don't know.
+message Card {
+  string kind = 1; // "itinerary", "receipt", "options_list", ...
+  string fallback_markdown = 2;
+  bytes payload_json = 3; // UTF-8 JSON, schema versioned per kind
+}
+
+message ReactionPayload {
+  string target_event_id = 1;
+  string emoji = 2;      // single grapheme cluster
+  bool removed = 3;      // true = retract a prior reaction
+}
+
+message TypingPayload {
+  bool active = 1;
+  // Agent-only hint shown next to the indicator ("searching flights…").
+  string activity_hint = 2;
+}
+
+message ReceiptPayload {
+  // Everything up to and including this seq has been read on this device.
+  int64 read_up_to_seq = 1;
+}
+
+message PresencePayload {
+  bool online = 1;
+}
+
+message MessageEditPayload {
+  string target_event_id = 1;
+  string new_markdown = 2;
+}
+
+message MessageDeletePayload {
+  string target_event_id = 1;
+}
+
+// Task lifecycle projected into the conversation so stream-only clients can
+// render progress cards. The full Task lives behind TaskService.
+message TaskUpdatePayload {
+  string task_id = 1;
+  TaskStatus status = 2;
+  string title = 3;
+  // Short human-readable progress line ("found 3 options under $900").
+  string note = 4;
+}
+
+message ApprovalRequestedPayload {
+  string approval_id = 1;
+  string task_id = 2;
+  // What the agent wants to do, in plain language. Shown verbatim in the
+  // approval UI — must be generated so that approving exactly this text is
+  // informed consent ("Book ANA 212, $848, window seat, nonrefundable").
+  string summary_markdown = 3;
+  Card details = 4;
+  google.protobuf.Timestamp expires_at = 5;
+}
+
+message ApprovalResolvedPayload {
+  string approval_id = 1;
+  enum Decision {
+    DECISION_UNSPECIFIED = 0;
+    DECISION_APPROVED = 1;
+    DECISION_DENIED = 2;
+    DECISION_EXPIRED = 3;
+  }
+  Decision decision = 2;
+  string note = 3; // optional user note ("yes but aisle is fine too")
+}

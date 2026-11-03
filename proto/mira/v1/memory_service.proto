@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package mira.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// User-visible memory control (spec §4.5). Only the profile and state tiers
+// are exposed: episodic summaries are internal, but ForgetSegment lets a
+// user excise a conversation's episodic trace entirely.
+service MemoryService {
+  rpc ListMemories(ListMemoriesRequest) returns (ListMemoriesResponse);
+  rpc UpdateMemory(UpdateMemoryRequest) returns (UpdateMemoryResponse);
+  rpc DeleteMemory(DeleteMemoryRequest) returns (DeleteMemoryResponse);
+  // "Forget that conversation": deletes the segment's episodic memory and
+  // tombstones derived profile facts whose only source was this segment.
+  rpc ForgetSegment(ForgetSegmentRequest) returns (ForgetSegmentResponse);
+}
+
+message Memory {
+  string memory_id = 1;
+  enum Tier {
+    TIER_UNSPECIFIED = 0;
+    TIER_PROFILE = 1; // durable facts/preferences, user-editable
+    TIER_STATE = 2;   // open commitments; read-only here (resolved via tasks)
+  }
+  Tier tier = 2;
+  // The fact as the agent would state it ("prefers window seats").
+  string content = 3;
+  // Where it came from — segment ids, shown as "from your conversation on
+  // Nov 3" in the UI. Empty for user-authored memories.
+  repeated string source_segment_ids = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message ListMemoriesRequest {
+  Memory.Tier tier = 1; // TIER_UNSPECIFIED = all exposed tiers
+  int32 page_size = 2;
+  string page_token = 3;
+}
+
+message ListMemoriesResponse {
+  repeated Memory memories = 1;
+  string next_page_token = 2;
+}
+
+message UpdateMemoryRequest {
+  string memory_id = 1; // empty = create a new user-authored profile memory
+  string content = 2;
+}
+
+message UpdateMemoryResponse {
+  Memory memory = 1;
+}
+
+message DeleteMemoryRequest {
+  string memory_id = 1;
+}
+
+message DeleteMemoryResponse {}
+
+message ForgetSegmentRequest {
+  string segment_id = 1;
+}
+
+message ForgetSegmentResponse {
+  // Profile memories tombstoned as a side effect, so the UI can show
+  // "this also removed: prefers window seats".
+  repeated Memory removed_memories = 1;
+}

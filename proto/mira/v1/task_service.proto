@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package mira.v1;
+
+import "mira/v1/event.proto";
+import "mira/v1/task.proto";
+
+// Rich task UI (task drawer, artifacts, retry) and the approval write-path.
+// A client that only implements ConversationService still sees task progress
+// via TaskUpdatePayload events; this service is additive.
+service TaskService {
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+
+  // Live task snapshots for an open task drawer. Same resumption contract as
+  // StreamEvents: server may cycle the stream; reconnect is the normal path.
+  rpc WatchTask(WatchTaskRequest) returns (stream WatchTaskResponse);
+
+  // Idempotent; cancelling a terminal task is a no-op returning its state.
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+
+  // Mid-flight instruction without cancelling ("actually prefer JAL").
+  // The task re-plans at its next checkpoint. FAILED_PRECONDITION if the
+  // task is terminal.
+  rpc SteerTask(SteerTaskRequest) returns (SteerTaskResponse);
+
+  // The human-in-the-loop gate. FAILED_PRECONDITION if already resolved or
+  // expired — the first resolution wins, including across devices.
+  rpc ResolveApproval(ResolveApprovalRequest) returns (ResolveApprovalResponse);
+}
+
+message ListTasksRequest {
+  string conversation_id = 1;
+  // Empty = all statuses.
+  repeated TaskStatus statuses = 2;
+  int32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListTasksResponse {
+  repeated Task tasks = 1;
+  string next_page_token = 2;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message GetTaskResponse {
+  Task task = 1;
+}
+
+message WatchTaskRequest {
+  string task_id = 1;
+}
+
+message WatchTaskResponse {
+  Task task = 1;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+  string reason = 2;
+}
+
+message CancelTaskResponse {
+  Task task = 1;
+}
+
+message SteerTaskRequest {
+  string task_id = 1;
+  string instruction = 2;
+  // Idempotency key, same contract as AppendEvent.client_id.
+  string client_id = 3;
+}
+
+message SteerTaskResponse {
+  Task task = 1;
+}
+
+message ResolveApprovalRequest {
+  string approval_id = 1;
+  ApprovalResolvedPayload.Decision decision = 2;
+  string note = 3;
+  string client_id = 4;
+}
+
+message ResolveApprovalResponse {
+  // The approval_resolved event appended to the conversation (seq-ordered
+  // proof of the decision).
+  Event event = 1;
+}

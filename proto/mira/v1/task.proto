@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package mira.v1;
+
+import "google/protobuf/timestamp.proto";
+import "mira/v1/common.proto";
+
+enum TaskStatus {
+  TASK_STATUS_UNSPECIFIED = 0;
+  TASK_STATUS_RUNNING = 1;
+  TASK_STATUS_WAITING_APPROVAL = 2; // blocked on a human decision
+  TASK_STATUS_WAITING_EXTERNAL = 3; // blocked on the world (webhook, retry window)
+  TASK_STATUS_COMPLETED = 4;
+  TASK_STATUS_FAILED = 5;
+  TASK_STATUS_CANCELLED = 6;
+}
+
+// A durable agent run. Created by the agent, never by clients. Checkpointed
+// per step so a worker crash resumes instead of restarting — which is also
+// what makes "exactly one purchase" possible.
+message Task {
+  string task_id = 1;
+  string conversation_id = 2;
+  TaskStatus status = 3;
+  string title = 4;
+  // The agent's current plan, as user-presentable markdown. Re-written on
+  // steer/re-plan; history of plans is in the steps.
+  string plan_markdown = 5;
+  repeated TaskStep steps = 6;
+  repeated AttachmentRef artifacts = 7;
+  google.protobuf.Timestamp created_at = 8;
+  google.protobuf.Timestamp updated_at = 9;
+  google.protobuf.Timestamp completed_at = 10;
+  // Set when status = FAILED.
+  string failure_reason = 11;
+}
+
+message TaskStep {
+  string step_id = 1;
+  string description = 2; // "search united.com", "hold seat 23A"
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_PENDING = 1;
+    STATE_RUNNING = 2;
+    STATE_DONE = 3;
+    STATE_FAILED = 4;
+    STATE_SKIPPED = 5;
+  }
+  State state = 3;
+  // Steps with side effects a user would call consequential (pay, send,
+  // post) MUST reference the approval that authorized them.
+  bool consequential = 4;
+  string approval_id = 5;
+  google.protobuf.Timestamp started_at = 6;
+  google.protobuf.Timestamp finished_at = 7;
+}
