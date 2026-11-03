@@ -103,9 +103,21 @@ message ClientSignal {
     TypingPayload typing = 2;
     ReceiptPayload receipt = 3;
     PresencePayload presence = 4;
+    DeliveryAck delivery_ack = 6;
   }
-  // Required for typing/receipt/presence (Resume is stream-scoped).
+  // Required for typing/receipt/presence (Resume and DeliveryAck are
+  // stream-scoped).
   string conversation_id = 5;
+}
+
+// Transport-level cumulative delivery acknowledgement, sent periodically
+// (e.g. every ~10s or 100 events) DURING the stream — distinct from the
+// user-visible read ReceiptPayload. Lets the server trim its replay buffer
+// below the acked seq and detect zombie streams. Purely an optimization:
+// correctness still rests on Resume cursors at reconnect.
+message DeliveryAck {
+  // Highest contiguously persisted seq per conversation_id.
+  map<string, int64> acked_seqs = 1;
 }
 
 message Resume {

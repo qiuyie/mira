@@ -285,6 +285,18 @@ service MemoryService {
 
 ---
 
+### 4.7 Evaluation against contemporary agent-protocol archetypes
+
+Reviewed against three production/next-gen protocol shapes for long-lived assistant agents (a coupled per-turn stream with unary control plane and reverse gateway callbacks; a single multiplexed bidirectional stream with in-band sequenced writes and dual-direction cumulative ACKs; and a split unary-read / server-stream-subscribe / unary-write feed protocol). Conclusions:
+
+- **Avoid the per-turn-stream shape entirely.** Entangling stream lifetime with turn lifetime forces reset/reattach timers and resume hacks, and a gateway that co-writes turn state with the agent invites dual-writer races. Our event log with the agent runtime as sole writer, and device streams decoupled from turns, is the correction the next-gen designs also make.
+- **The single multiplexed bidi stream is the best *mental model* but not the simplest system.** It moves writes in-band, which requires app-layer reliability (per-frame input/output sequence numbers, cumulative ACKs both directions, replay buffers, cursor-eviction fallbacks) implemented in every client. And it is never actually single: cold start and eviction recovery still require unary reads, so the real topology is unary reads + one pipe — the same shape as ours with writes relocated. Its decisive advantage is multiplexing full-duplex audio/video with agentic turns on one envelope; we have deferred voice, so we do not pay for that today.
+- **The split-RPC feed shape is our closest relative — and it was chosen where the gateway could not hold long bidi streams.** Transport constraints you don't control (gateway deadlines, gRPC-Web's lack of bidi) decide the protocol. Unary `AppendEvent` degrades gracefully everywhere and lets a write race stream setup on a cold radio instead of queuing behind a handshake.
+
+**Decision: keep the split (unary idempotent write + stream delivery).** Revisit only if full-duplex voice/video becomes core; then adopt a multiplexed media envelope *for the live session* alongside the same event log.
+
+**Adopted from the review:** (a) in-stream cumulative delivery ACKs — extend `ClientSignal` with periodic `acked_output_seq` so the server can trim replay buffers and detect zombie streams, not just at Resume; (b) explicitly document that `AppendEvent` never waits on stream handshake (pipelining property); (c) reserve a seam for a future reactive shared **WorkspaceService** (watch/mutate structured state behind an epoch-fenced single writer) for live interactive surfaces — v1 ships static `Card`s only. Also validating: the reviewed next-gen companion product decomposes its runtime into a frontline triage actor (emoji acks), a background task worker, a proactive cron runner, and an offline memory-consolidation actor — near-isomorphic to our two-lane runtime, Tasks, heartbeats, and memory-extraction worker (§4.3, §4.5).
+
 ## 5. What we deliberately did NOT include (YAGNI)
 
 - Multi-user / group conversations (mono-thread product; model leaves room via `Participant`).
