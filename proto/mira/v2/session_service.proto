@@ -1,0 +1,183 @@
+syntax = "proto3";
+
+package mira.v2;
+
+import "mira/v1/conversation_service.proto";
+import "mira/v1/event.proto";
+
+// mira.v2 — the single multiplexed bidirectional session ("bidi all the way").
+//
+// SCAFFOLD STATUS: wire shapes are settled; field-level semantics marked TODO
+// are open design points tracked in the wire-protocol review doc.
+//
+// What v2 replaces: v1 AppendEvent + StreamEvents (the live paths).
+// What v2 keeps from v1 unchanged:
+//   - the EVENT VOCABULARY (mira.v1.Event and all payloads) — the durable
+//     investment; every frame below carries v1 messages.
+//   - cold start, deep backfill and eviction recovery: unary/finite reads
+//     (mira.v1.ConversationService.ListConversations / SyncEvents). A bidi
+//     protocol is always "bidi + unary reads"; v2 does not pretend otherwise.
+//
+// Invariants (the session contract):
+//   1. One Session stream per device. First client frame MUST be Open.
+//   2. Sequence spaces (input_seq, output_seq) are SESSION-SCOPED and reset
+//      on every successful Open. Exactly-once therefore does NOT rest on
+//      them: every Input carries a durable idempotency key (client_id) that
+//      the server dedupes against storage, so replay into a new session
+//      after an uncertain resume is always safe.
+//   3. ACKs are cumulative in both directions. The server trims its replay
+//      buffer below acked_output_seq; the client trims its outbox below
+//      acked_input_seq (and reconciles per-input via InputResult).
+//   4. The replay buffer is BOUNDED. A Resume whose cursor fell out of it
+//      gets ResumeRequired{CURSOR_EVICTED}: run v1 SyncEvents, then Open
+//      again. Stream end without error, and GoAway, mean "reopen and
+//      resume", never "failure".
+//   5. Per-operation errors travel in-band (InputResult.error). The RPC
+//      status is reserved for session-fatal conditions only, because it
+//      terminates every in-flight operation on the stream at once.
+service SessionService {
+  rpc Session(stream SessionRequest) returns (stream SessionResponse);
+}
+
+message SessionRequest {
+  oneof frame {
+    Open open = 1;            // MUST be first; anything else first → FAILED_PRECONDITION
+    Input input = 2;
+    OutputAck output_ack = 3; // periodic cumulative delivery ack
+    Cancel cancel = 4;
+    Signal signal = 5;        // ephemeral: typing / presence / receipts
+    Ping ping = 6;
+  }
+}
+
+message SessionResponse {
+  oneof frame {
+    Opened opened = 1;
+    ResumeRequired resume_required = 2;
+    Output output = 3;
+    InputResult input_result = 4;
+    Signal signal = 5;        // ephemeral fan-in from other devices / agent
+    GoAway go_away = 6;
+    Pong pong = 7;
+  }
+}
+
+// ---- handshake -------------------------------------------------------------
+
+message Open {
+  // Empty = create a new conversation (server assigns); otherwise resume.
+  string conversation_id = 1;
+  // Highest output the device has durably applied, per conversation.
+  // Zero/absent = cold start (server replays nothing; client is expected to
+  // have hydrated via v1 SyncEvents first).
+  int64 acked_output_cursor_seq = 2; // cursor in LOG seq space, not output_seq
+  string device_id = 3;
+  // Inputs MAY be pipelined immediately after Open without waiting for
+  // Opened; they are buffered and processed only if the Open succeeds.
+}
+
+message Opened {
+  string conversation_id = 1;
+  // Monotonic per (conversation, device); lets the server fence frames from
+  // a zombie predecessor stream racing a successor.
+  int64 session_epoch = 2;
+  // Where the server believes this device's durable cursor stands; replay
+  // of persisted events > this value follows as ordinary Output frames.
+  int64 resume_from_seq = 3;
+  int64 latest_seq = 4;
+}
+
+message ResumeRequired {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    REASON_CURSOR_EVICTED = 1;   // gap exceeds replay buffer → v1 SyncEvents first
+    REASON_EPOCH_SUPERSEDED = 2; // a newer session for this device took over
+  }
+  Reason reason = 1;
+  int64 earliest_replayable_seq = 2;
+  int64 latest_seq = 3;
+}
+
+// ---- client → server -------------------------------------------------------
+
+message Input {
+  // Session-scoped, starts at 1 per session, strictly increasing. Orders
+  // inputs on the pipe and keys InputResult correlation.
+  int64 input_seq = 1;
+  // Durable idempotency key (UUIDv7). THE exactly-once mechanism; survives
+  // session loss. Required.
+  string client_id = 2;
+  mira.v1.EventBody body = 3;  // same client-writable vocabulary as v1
+}
+
+message OutputAck {
+  // Cumulative: highest contiguous LOG seq durably applied, per conversation.
+  map<string, int64> acked_seqs = 1;
+}
+
+message Cancel {
+  oneof target {
+    string task_id = 1;
+    string turn_scope = 2; // TODO: turn identity on the wire is an open design point
+  }
+}
+
+// Ephemeral, never persisted, never sequenced (mirrors v1 seq=0 semantics).
+message Signal {
+  string conversation_id = 1;
+  oneof kind {
+    mira.v1.TypingPayload typing = 2;
+    mira.v1.PresencePayload presence = 3;
+    mira.v1.ReceiptPayload receipt = 4;
+  }
+}
+
+message Ping { int64 nonce = 1; }
+message Pong { int64 nonce = 1; }
+
+// ---- server → client -------------------------------------------------------
+
+message Output {
+  // Session-scoped frame counter (contiguous within the session). Distinct
+  // from the durable LOG seq each Event carries; OutputAck acks log seqs.
+  int64 output_seq = 1;
+  // Cumulative input ack rides every Output frame (and InputResult), so the
+  // client's outbox trims without dedicated ack frames.
+  int64 acked_input_seq = 2;
+  repeated mira.v1.Event events = 3;
+}
+
+// Per-input resolution: the assigned durable position, or an in-band error.
+// This is deliberately NOT the RPC status — failing the stream for one bad
+// input would kill every other in-flight operation (invariant 5).
+message InputResult {
+  int64 input_seq = 1;
+  string client_id = 2;
+  oneof result {
+    mira.v1.Event event = 3;   // persisted (or original, on idempotent replay)
+    InputError error = 4;
+  }
+}
+
+message InputError {
+  // Mirrors google.rpc.Code values (e.g. 3 = INVALID_ARGUMENT,
+  // 8 = RESOURCE_EXHAUSTED) so client handling can share code with
+  // RPC-status handling.
+  int32 code = 1;
+  string message = 2;
+  bool retryable = 3;
+}
+
+// Graceful cycling (stream TTL, load shedding, deploys): finish is clean,
+// client reopens with its cursor. Never an error.
+message GoAway {
+  enum Reason {
+    REASON_UNSPECIFIED = 0;
+    REASON_TTL = 1;
+    REASON_LOAD = 2;
+    REASON_DEPLOY = 3;
+  }
+  Reason reason = 1;
+  // Hint: how long to wait before reopening (0 = immediately).
+  int64 retry_after_ms = 2;
+}

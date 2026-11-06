@@ -39,6 +39,16 @@ Unknown payload arms render as a generic activity row via `type_hint`. Ephemeral
 `ListMemories` (PROFILE + STATE tiers) · `UpdateMemory` (empty id = create user-authored) · `DeleteMemory` · `ForgetSegment` (removes a segment's episodic memory; returns tombstoned derived profile facts).
 `Memory{tier: PROFILE|STATE, content, source_segment_ids, timestamps}`. Episodic tier is internal.
 
+## mira.v2 — bidi session (`mira/v2/session_service.proto`, scaffold)
+
+The single-multiplexed-stream alternative ("bidi all the way"), scaffolded per the wire-protocol review. One RPC: `SessionService.Session(stream SessionRequest) returns (stream SessionResponse)`.
+
+- **Replaces** v1 `AppendEvent` + `StreamEvents` (the live paths). **Keeps** the v1 event vocabulary by import, and v1 `ListConversations`/`SyncEvents` for cold start, deep backfill and eviction recovery — bidi is always "bidi + unary reads".
+- Client frames: `Open` (first; inputs may pipeline behind it) · `Input{input_seq, client_id, EventBody}` · `OutputAck` (cumulative, log-seq space) · `Cancel` · `Signal` (ephemeral) · `Ping`.
+- Server frames: `Opened{session_epoch, resume_from_seq}` · `ResumeRequired{CURSOR_EVICTED | EPOCH_SUPERSEDED}` · `Output{output_seq, acked_input_seq, events}` · `InputResult{event | InputError}` (per-op, in-band — RPC status is session-fatal only) · `Signal` · `GoAway{TTL | LOAD | DEPLOY, retry_after_ms}` · `Pong`.
+- Session contract invariants (header comment of the proto): sequence spaces are session-scoped and reset on `Open`; exactly-once rests on the durable `client_id` idempotency key, never on sequence numbers; ACKs are cumulative both ways; the replay buffer is bounded; stream end and `GoAway` mean "reopen with cursor", never failure.
+- Prerequisites recorded in the review doc: first-party client SDK per platform owning the session state machine; measured gateway stream-lifetime caps; WebSocket carriage of the same envelope for web.
+
 ## Reserved seams (no proto yet, by design)
 
 - **WorkspaceService** — reactive shared state (Get/Watch/Mutate, epoch-fenced single writer) for live interactive surfaces; v1 ships static Cards only.
