@@ -3,8 +3,8 @@
 How I write technical prose. It applies to me and to any model drafting in my voice.
 
 Sources: three internal docs (AIX Gateway Actor, Sticky Search, Agency Overview v2),
-Andrej Karpathy's public essays, and a close reading of one research paper whose prose
-I admire. The sources are uneven, so this takes what works in each and names what does
+Andrej Karpathy's public essays, and research papers whose prose I admire. The sources
+are uneven, so this takes what works in each and names what does
 not.
 
 ## Scope
@@ -31,7 +31,7 @@ sentence is about the number. No selling.
 
 **I. Claim before support.**
 Whatever the unit, the reader learns what it asserts before reading why. A paragraph
-opens on its point: "Next-token prediction, however, is a limited evaluation metric."
+opens on its point: "Polling, however, is a poor fit for long-running work."
 A reader who takes only first sentences still gets the argument. This holds whether a
 document carries one idea or many: each idea is stated where it starts.
 
@@ -54,7 +54,8 @@ or evidence behind it, cut the claim.
 
 **V. Plain words after anything formal.**
 Every definition, formula, schema, code block and diagram is followed by a sentence
-that says what it means: "That is, recovery requires that...". A reader who skips the
+that says what it means: "That is, a retry is acknowledged again but never run
+twice." A reader who skips the
 formal part loses nothing they need for the next paragraph. A caption says what is
 shown and then what to take from it.
 
@@ -86,7 +87,7 @@ not reproduced". Certainty is stated without a qualifier.
 
 **XI. The limit sits next to the claim, stated once and flatly.**
 If a guarantee has an exception, the exception is in the same paragraph. "Our primary
-limitation is the focus on DFAs." Never claim early and retract later, and never
+limitation is that the prototype has never run under load." Never claim early and retract later, and never
 apologize for the limit more than once.
 
 **XII. One name per thing.**
@@ -96,8 +97,8 @@ coin a short name for it, as Karpathy does ("Software 2.0").
 
 **XIII. Orient the reader at each turn.**
 When the text moves to a new part, one sentence says what was just established and
-what comes next: "Our evaluation metrics point to deficiencies in recovering world
-models. We now show that these metrics reveal underlying incoherence." This is a
+what comes next: "The cursor makes a reconnect safe. We now show what happens when
+the cursor itself is lost." This is a
 hand-off that looks forward. It is different from a closing line that repeats the
 paragraph, which is banned below.
 
@@ -131,8 +132,8 @@ nothing about this one.
   since, while, thus, for example. They carry the logic, so do not delete them to
   sound terse.
 - **Questions.** Allowed when the question is the objection a skeptical reader was
-  about to raise: "Does it matter that the transformer has an incoherent world model?
-  After all, it does very well at the practical task." They work because they are rare.
+  about to raise: "Does it matter that the cold store cannot rebuild the trajectory?
+  After all, it reloads the conversation correctly." They work because they are rare.
   A handful per document.
 - **Numbers.** A number is in a sentence because the sentence is about that number.
   Precision lives in the table. A sentence with three or more numerals should be rare.
@@ -140,8 +141,8 @@ nothing about this one.
 - **Semicolon.** To join two closely paired clauses. Rarely.
 - **Dashes.** I do not write em dashes. If a sentence wants one, it wants a colon, a
   comma, a parenthesis or a full stop.
-- **Parentheses.** For glosses: "(i.e. intersections)", "(proof given in Appendix
-  A)". A parenthesis never carries a result the argument depends on. One per sentence.
+- **Parentheses.** For glosses: "(i.e. the sequence number)", "(details in the
+  appendix)". A parenthesis never carries a result the argument depends on. One per sentence.
 - **Emphasis.** Bold for the few phrases a skimming reader must not miss. Italics for a
   term at first use and for the rare stressed word. Nothing else.
 - **Code font.** Only for things a reader could type or grep. Never for a concept.
@@ -154,8 +155,8 @@ nothing about this one.
 - **Parallel items.** Every item in a list has the same grammatical shape.
 - **Complete sentences.** No fragments made by a stray full stop.
 
-The figures above for sentence length, questions and numerals were measured in one
-reference paper. They calibrate the ear. They are not quotas to hit.
+The figures above for sentence length, questions and numerals calibrate the ear. They
+are not quotas to hit.
 
 ## 4. Prose quality tests
 
