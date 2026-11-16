@@ -45,8 +45,8 @@ believes or a source reports. If nobody holds the first half, there is no contra
 Give the reader an instance they can picture, then the general statement it motivates:
 one run, one toy example, one number, four lines of code. Intuition comes before
 formalism, and the smallest working example comes before the full system. When the
-generalization arrives, the reader already holds a case of it. If a claim has no instance, mechanism
-or evidence behind it, cut the claim.
+generalization arrives, the reader already holds a case of it. If a claim has no
+instance, mechanism or evidence behind it, cut the claim.
 
 **V. Plain words after anything formal.**
 Every definition, formula, schema, code block and diagram is followed by a sentence
