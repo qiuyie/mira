@@ -1,11 +1,11 @@
 # Mira, the map companion: product spec
 
-Status: draft for review, 2026-11-22. v2: navigation frame, lens, one thread with strands. UI mocks and the character sheets: https://claude.ai/artifact/K31Jt8FNidngqVZU2gUf3Z
+Status: draft for review, 2026-11-22. v2: navigation frame, lens, one thread with strands. Final figure: the brand pin, set free, with eyes. UI mocks and the character sheets: https://claude.ai/artifact/K31Jt8FNidngqVZU2gUf3Z
 Backend references: `docs/api-outline.md`, `proto/mira/v1/*.proto`.
 
 ## 1. Summary
 
-Mira is an AI agent that lives on a mobile map as a small glowing figure in a round glass button, the *lens*, at the top-centre of the screen. The map is full-bleed with no search bar: the composer at the bottom edge is how the user asks for anything. She reads the user's location, the map view and what the user types or says, and answers in the smallest form that works, from one line under the lens to a full itinerary. Her glow and the lens rim are the status display, and the user's proof of when she is reading location or the viewport. A fixed frame surrounds the map (section 4). The sheet above the composer holds one conversation, the *thread*, which tracks side chats inline as *strands*. The backend has the durable parts (event log, Tasks, approvals, Cards, memory). It has no notion yet of a viewport, a place, a strand, or how loudly an agent-initiated event may speak (section 12).
+Mira is an AI agent that lives on a mobile map as a small figure in a round glass button, the *lens*, at the top-centre of the screen. The map is full-bleed with no search bar: the composer at the bottom edge is how the user asks for anything. She reads the user's location, the map view and what the user types or says, and answers in the smallest form that works, from one line under the lens to a full itinerary. Her figure and the lens aura are the status display, and the user's proof of when she is reading location or the viewport. A fixed frame surrounds the map (section 4). The sheet above the composer holds one conversation, the *thread*, which tracks side chats inline as *strands*. The backend has the durable parts (event log, Tasks, approvals, Cards, memory). It has no notion yet of a viewport, a place, a strand, or how loudly an agent-initiated event may speak (section 12).
 
 ## 2. Principles
 
@@ -16,7 +16,7 @@ Mira is an AI agent that lives on a mobile map as a small glowing figure in a ro
 | The frame never moves. | Each edge has one job at every sheet height. |
 | One surface, two views. | Map and sheet share one selection and one subject. |
 | The smallest form that answers. | She starts small and the user opens it up. |
-| The glow never lies. | If she reads location or the viewport, she is visibly Noticing or Working. |
+| The figure never lies. | If she reads location or the viewport, she is visibly Noticing or Working. |
 | Attention is a budget. | Viewport noticing stops at a whisper. Only approvals persist until answered. |
 | Consequential actions need the user's yes. | Booking, paying and sending go through an approval whose text is the exact consent. |
 
@@ -24,53 +24,61 @@ Mira is an AI agent that lives on a mobile map as a small glowing figure in a ro
 
 ### 3.1 Who she is
 
-**Mira is a map pin that came alive.** A pin is a teardrop pointing down, stuck to one place. Turn it over and let it float, and it becomes a small flame of light that travels with you. A pin marks where you are going; Mira goes with you.
+**Mira is the brand pin, set free.** She is the product's own four-colour map pin, flipped tip-up, with the pin's round opening kept as her white face window. A pin marks a place; flipped and set free, it goes with you.
 
 The name is the star Mira, the first star people saw brighten and fade, and the Spanish "¡mira!", "look!". Her character is warm, curious and calm. If nothing is worth saying she says nothing, and the figure shows that by resting.
+
+The figure took two rounds. A star-sprite and a lantern creature were explored and dropped. "The pin that came alive", in honey light, won the first round on silhouette and the flip. The second round rooted that idea in the brand. Its other option, "the face in the pin" (the icon upright with a face in its opening), was closest to the mark but read at rest as a logo with a face.
+
+Eyes were a decision. Of three built versions (eyes, no eyes with a window that blinks and squints, eyes on demand) we chose eyes, for warmth and because gaze, sleep and joy read without learning.
+
+The figure is built on the product's brand mark. Using it assumes brand approval for a character built on the mark, which is an open dependency (question 9).
 
 ### 3.2 Anatomy
 
 | Part | What it is | What it expresses |
 |---|---|---|
-| Belly | A round body of honey light (`#FFB627` to ember `#FF7A3D`) | Her presence. It is always visible |
-| Tip | The curled point on top, the old pin point | Mood and attention. It sways, perks and flops |
-| Face | Two ink dot eyes set low, a blush | Where she is looking. The eyes follow the pan |
-| Halo | A soft radial glow behind her | How much she is doing |
-| Motes | Up to three small lights in orbit | One per running Task. The same motes mark each strand in the thread (section 8) |
-| Ring | A steady blue circle | It is the user's turn. Blue is the user's colour everywhere |
-| Lens | The 76 px round glass button that frames her | That she can be tapped. Its rim and glow repeat her state |
+| Tip | The curled point on top, the old pin point, green | Mood and attention. It sways, perks and flops |
+| Window | The pin's round opening, white: two dot eyes, a blush, a tiny smile | Her face. The eyes follow the pan |
+| Body | The four brand colours, rotated with the flip: green tip and shoulders, yellow right, red lower right, blue lower left | Her presence. It is always visible |
+| Aura | A soft glow in her own colours | How busy she is |
+| Motes | Up to three small lights in orbit: yellow, green, red in that order, never blue | One per running Task. The same motes mark each strand in the thread (section 8) |
+| Ring | A steady blue circle on a white gap ring | It is the user's turn |
+| Lens | The 76 px round glass button that frames her: white rim, four-colour aura | That she can be tapped |
 
-She ships inside the lens: a 76 px glass button, top-centre, 54 px from the top edge, with a body of about 44 px. The lens never moves, at any sheet height. Tapping it opens Mira's drawer (section 4). Outside the lens she scales from 24 px (notification row) to 240 px (brand).
+She ships inside the lens: a 76 px glass button, top-centre, 54 px from the top edge, with a body of about 44 px. Outside the lens she scales from 24 px (notification row) to 240 px (brand).
 
-We frame her because the bare v1 figure did not read as a button, and because her halo lost contrast over parks and water. Glass gives her the same backdrop on every map.
+We frame her because the bare v1 figure did not read as a button, and because its aura lost contrast over parks and water. Glass gives her the same backdrop on every map.
 
 ### 3.3 Signature motion per state
 
-Each state shows twice: in her body, and on the lens rim and glow. The rim makes a state readable in the corner of the eye, without resolving a 44 px face.
+Each state shows in her body and in the strength of the lens aura, which reads in the corner of the eye without resolving a 44 px face.
 
-| State | Motion | Lens rim and glow |
-|---|---|---|
-| Resting | Slow float and halo breath on a 4.8 s cycle, an occasional blink | Soft glow, no rim |
-| Noticing | Body and face lean toward the pan; a sheen sweeps the belly as the scan | Thin honey rim |
-| Working | Halo pulses on a 1.8 s beat, one mote orbits per running Task | Rim pulses on the same beat |
-| Has-something | A ring of short rays blooms once, and the whisper unfurls under the lens | Bright rim |
-| Listening | Body widens; two rings track voice amplitude | Rings swell to the rim |
-| Composing | **The flip.** She spins tip-down inside the lens, a pin again for a moment, and pours drops of light onto the map | Bright rim |
-| Needs-you | The blue ring appears and holds. She is almost still. Nothing pulses | The ring sits on the rim |
-| Delivered | One hop with smiling eyes and three sparkles | Bright, then soft |
-| Dimmed | Grey, sitting lower, eyes closed, tip flopped over | No glow |
+| State | Motion |
+|---|---|
+| Resting | Slow float on a 4.8 s cycle, the tip sways, an occasional blink, low aura |
+| Noticing | She leans toward the pan, the face window slides and peers, and a sheen sweeps her body as the scan |
+| Working | The aura pulses on a 1.8 s beat, the tip ticks, and one mote orbits per running Task |
+| Has-something | She perks up, amber rays bloom once, a white idea dot sits above the tip, and the whisper unfurls under the lens |
+| Listening | Her body opens and the tip cocks like an ear. Thin green rings and the aura follow the voice |
+| Composing | **The flip.** She spins tip-down, the curled tip straightens and the window shrinks to the icon's proportion, so she lands exactly on the brand pin (red upper-left, blue upper-right, yellow left, green tip). She pours drops from the tip and spins back |
+| Needs-you | The blue ring holds and the aura turns down. She is almost still |
+| Delivered | One happy hop with smiling eyes and three sparkles, played once |
+| Dimmed | Greyscale, eyes closed, tip flopped over, no aura |
 
-The flip ties the figure to the map: every mark she places arrives as light from her tip, so the user sees where an answer came from.
+The flip ties the figure to the map: every mark she places arrives as a drop from her tip, so the user sees where an answer came from.
 
 ### 3.4 Motion principles
 
-1. **Light before motion.** A state must be readable from the lens rim and glow alone, which is also what the reduced-motion version shows.
+1. **A still frame before motion.** A state must be readable from a still frame (aura, ring, motes, eyes, tip). That is also what the reduced-motion version shows.
 2. **One signal at a time.** She shows one state, chosen by the precedence in 3.6. Only the ring and the motes persist under other states.
 3. **She never bounces for attention.** Nothing loops a hop or shows a badge count.
 
 ### 3.5 Colour
 
-Honey is Mira: her body, her marks on the map, her messages. Blue (`#2F6BFF`) is the user: the location dot, the user's messages, and anything waiting on the user's decision. There are no other accents, and neither colour is the only signal for anything (section 11).
+**Four colours are Mira. Yellow is her light. Solid blue is you.** Her body is the four brand colours: red `#EA4335`, blue `#4285F4`, yellow `#FBBC04` and green `#34A853`. Yellow is her light: her marks on the map, lit areas, the dotted threads that run from her to each mark she places, the tint of her messages, and strand and scope chips. The user is solid blue `#1A73E8`: the location dot, the user's messages, approvals and the Needs-you ring.
+
+One tension is known: her body contains a blue segment. So blue as "you" is always a solid ring or a solid fill and never a blend, and no prop outside her body is blue. Colour is never the only signal (section 11).
 
 ### 3.6 States and signals
 
@@ -88,11 +96,11 @@ Honey is Mira: her body, her marks on the map, her messages. Blue (`#2F6BFF`) is
 
 Two decisions follow. A Task in `WAITING_EXTERNAL` (a table watch that waits three days) does not pulse: Working means compute is happening now, so the watch is a waiting mote on a Resting figure. A `FAILED` Task has no state of its own: she shows Has-something with a plain whisper, no bloom, and a drooped tip.
 
-When several states apply, the precedence is Dimmed, Listening, Needs-you, Composing, Has-something, Noticing, Working, Resting. The Needs-you ring stays visible under any state shown above it.
+When several states apply, the precedence is Dimmed, Listening, Needs-you, Composing, Has-something, Noticing, Working, Resting.
 
 ## 4. The frame: four edges
 
-The screen is the base map, the *map marks* Mira draws on it (lit areas, labelled pins, routes), and a frame whose four edges each have one job. The frame does not move when the sheet does. v1 put everything behind the figure, which kept the map clear but gave saved places and settings no visible home.
+The screen is the base map, the *map marks* Mira draws on it (lit areas, labelled pins, routes), and a frame whose four edges each have one job. v1 put everything behind the figure, which kept the map clear but gave saved places and settings no visible home.
 
 | Edge | Element | Job |
 |---|---|---|
@@ -107,7 +115,7 @@ Mira's drawer holds three groups: *Now* (what she is doing and which inputs she 
 
 **App settings and agent settings are separate on purpose.** App settings change how the map behaves with or without Mira: kilometres or miles, avoiding stairs. Agent settings change what Mira may see, what she remembers and how often she speaks. They sit behind the lens because a user who wants her quieter looks at her first. Location is on both sides: app settings hold the operating system permission, and the drawer holds whether Mira reads it.
 
-The sheet has four heights. Content always sits above the composer, which never leaves the bottom edge.
+The sheet has four heights.
 
 | Height | Size on a 390 x 844 screen | Above the composer |
 |---|---|---|
@@ -178,8 +186,8 @@ The sheet holds one continuous conversation with Mira, the thread, newest at the
 A *strand* is a side chat inside the thread: one piece of work the user can return to.
 
 - **Capsule.** A strand appears in the thread as one compact row at the point it started: a mote (running, waiting or done), a title, its latest line, and a count or state. It updates in place, so a three-day table watch adds no rows to the thread. Tapping it focuses the strand.
-- **Focused strand.** The sheet shows only that strand's messages under a back control and its title. The composer turns honey and carries a *scope chip* naming the strand, so the user sees where a message will go. Leaving returns to the same scroll position.
-- **Strand rail.** Chips directly above the composer list the two or three live strands. One that needs a decision is blue.
+- **Focused strand.** The sheet shows only that strand's messages under a back control and its title. The composer turns yellow and carries a *scope chip* naming the strand, so the user sees where a message will go. Leaving returns to the same scroll position.
+- **Strand rail.** Chips directly above the composer list the two or three live strands. One that needs a decision is solid blue.
 - **Fold.** Quick answers that have faded collapse to one centred line ("3 quick answers · Alder Quay · 12:40"). Tapping unfolds it.
 - **Stamp.** A place and time separator ("Alder Quay · today 12:38"), so the thread is organised by where the user was as well as when.
 
@@ -197,20 +205,20 @@ A *strand* is a side chat inside the thread: one piece of work the user can retu
 
 **Keep.** Every answer and card has a Keep action, which turns the exchange into a strand so it does not fold. If the intent is unclear Mira asks once ("Keep as a list, or watch for a table?").
 
-Now, Ongoing and From Mira survive only as groups in Mira's drawer. They are views over the thread, so nothing lives only in the drawer. An item leaves From Mira when the user replies to it, keeps it or dismisses it, or when it expires.
+Now, Ongoing and From Mira survive only as groups in Mira's drawer: views over the thread, so nothing lives only there. An item leaves From Mira when the user replies to it, keeps it or dismisses it, or when it expires.
 
-The API ships exactly one `KIND_MAIN` conversation today, which fits the thread. Whether a strand is a `KIND_SIDE` conversation or a projection over the main one is question 1.
+The API ships exactly one `KIND_MAIN` conversation today, which fits the thread. How a strand maps onto it is question 1.
 
 ## 9. Proactivity and attention budget
 
 | Rung | Cost to the user | Allowed when |
 |---|---|---|
-| Glow only | None | Always |
+| Figure only | None | Always |
 | Whisper | A glance. Dismisses itself (assumption: about 6 seconds) | She has something specific and current |
 | Message in the thread | A "From Mira" tag in the thread and an unread row in her drawer | The item belongs to a strand, or the user opened the whisper |
 | Push notification | An interruption | Time-critical, or the user asked for alerts on that strand |
 
-The proactivity level in Mira's drawer sets how far up the ladder she climbs unasked. Quiet stops at glow, plus approvals. Balanced allows whispers. Chatty lowers her bar for a whisper. The thresholds are unmeasured.
+The proactivity level in Mira's drawer sets how far up the ladder she climbs unasked. Quiet stops at the figure, plus approvals. Balanced allows whispers. Chatty lowers her bar for a whisper. The thresholds are unmeasured.
 
 Hard rules, at every level:
 
@@ -227,7 +235,7 @@ Hard rules, at every level:
 **(a) Lunch nearby**
 
 1. Resting, Rest. The user taps the composer and types "anything good for lunch?".
-2. Composing. Light falls from the lens to six map marks. The sheet rises to Peek with a card rail, and the whisper slot reads "Lunch, in this view".
+2. Composing. She flips, and drops fall from her tip to six yellow map marks. The sheet rises to Peek with a card rail, and the whisper slot reads "Lunch, in this view".
 3. The user drags to Half. The rail becomes a list and the camera re-pads to keep the marks in view.
 4. The user pans east. Browse mode re-sorts the list; on settle, Noticing, then "2 new in this view".
 5. The user taps a row and its mark lifts. Unless kept, the exchange later joins a fold.
@@ -246,7 +254,7 @@ Hard rules, at every level:
 2. Mira creates a Task. Working, one mote. A capsule, "Weekend in Porto", appears in the thread. The Task keeps running after the user closes the app.
 3. Next day: Delivered on open. Tapping the capsule focuses the strand at Full, showing the itinerary canvas.
 4. With the composer scoped to the strand, the user asks her to book the guesthouse. Working, then Needs-you. A push goes out because the hold has an `expires_at`.
-5. The strand's chip is blue. The user reads the exact text ("Book Casa do Rio, 2 nights, EUR 214, free cancellation to 4 Dec") and approves. The client calls `ResolveApproval`.
+5. The strand's chip is solid blue. The user reads the exact text ("Book Casa do Rio, 2 nights, EUR 214, free cancellation to 4 Dec") and approves. The client calls `ResolveApproval`.
 6. Delivered. A receipt Card joins the strand and the capsule's latest line updates.
 7. The restaurant has no table, so that Task is `WAITING_EXTERNAL` and its capsule shows a waiting mote.
 
@@ -274,7 +282,7 @@ Hard rules, at every level:
 
 ## 11. Trust, privacy, accessibility
 
-**Honesty of the glow.** The client sends a viewport or location signal only while it renders Noticing or Working. The Now group in her drawer lists each input in use with its reason ("Reading this view because you asked about lunch"). This is a client contract; nothing on the server enforces it.
+**Honesty of the figure.** The client sends a viewport or location signal only while it renders Noticing or Working. The Now group in her drawer lists each input in use with its reason ("Reading this view because you asked about lunch"). This is a client contract; nothing on the server enforces it.
 
 **Pause.** Pause Mira, in her drawer, sets Dimmed. The client then sends no viewport or location, and proactive work stops. Tasks the user started keep running, and the drawer says so.
 
@@ -284,7 +292,7 @@ Hard rules, at every level:
 
 - Each state has a spoken name, announced on change ("Mira, working on 2 tasks"). Noticing is not announced, because it fires on every pan.
 - Colour never carries state alone. Each state differs in shape or motion (ring for Needs-you, motes for Working, closed eyes for Dimmed). The scoped composer changes colour and also shows the scope chip.
-- With reduced motion on, pulses and hops become static changes (rim, ring, mote count) and camera flights become cuts.
+- With reduced motion on, pulses and hops become static changes (aura, ring, mote count) and camera flights become cuts.
 - Every map-placed Card is also a list in the sheet, so marks are reachable without the map.
 - With a screen reader on, whispers stay until dismissed.
 - Hold-to-talk has a tap-to-toggle alternative. The lens is a 76 px target and the other frame buttons are 48 px. Strand chips are 34 px tall, so their hit area extends to 44 pt.
@@ -317,10 +325,10 @@ Hard rules, at every level:
 
 1. **Are strands side Conversations or a client projection?** Side Conversations give each strand its own history and a target for the scoped composer, but reverse the backend's v1 lean. A projection over `segment_id` and Tasks ships sooner but has nowhere to store the id and title of a kept list with no Task.
 2. **Which proactivity level is the default, and is "this map view" on at first run?** Balanced with the view on makes wandering work from day one. Quiet makes the first Noticing an explicit choice.
-3. **Are unopened whispers persisted?** We propose that an ignored viewport whisper leaves nothing and an opened one lands in the thread. That needs an ephemeral agent message and a persist-on-tap path.
-4. **What does a fold promise?** Hiding rows (proposed) or deletion from history. Deletion contradicts the append-only log and needs a retention rule.
-5. **Where are background location triggers evaluated?** On the device (private, capped by OS quotas) or on the server (uploads location while backgrounded). This decides whether scenario (d) works with the phone locked.
-6. **Who enforces the attention budget?** The server holds the proactivity level and all pending items; the client knows whether the user is mid-gesture. A split needs a rule for which side may downgrade.
-7. **Is a drooped Has-something enough for `FAILED`?** If testing shows people miss failures, the vocabulary needs a tenth state.
-8. **Does a plain place-name search go through the agent?** If her first response to "Lisbon airport" is slower than a geocoder, the client needs a local fast path that still writes to the log.
-9. **May Mira re-route a message the scope chip sent to the wrong place?** A user focused on the Porto strand may ask about lunch. If the server may move it to the thread, the target on `AppendEvent` is a hint; if not, it is binding.
+3. **What persists: unopened whispers and folded rows?** We propose that an ignored viewport whisper leaves nothing, an opened one lands in the thread, and a fold only hides rows. The first needs an ephemeral agent message and a persist-on-tap path. Deleting folded rows would contradict the append-only log and need a retention rule.
+4. **Where are background location triggers evaluated?** On the device (private, capped by OS quotas) or on the server (uploads location while backgrounded). This decides whether scenario (d) works with the phone locked.
+5. **Who enforces the attention budget?** The server holds the proactivity level and all pending items; the client knows whether the user is mid-gesture. A split needs a rule for which side may downgrade.
+6. **Is a drooped Has-something enough for `FAILED`?** If testing shows people miss failures, the vocabulary needs a tenth state.
+7. **Does a plain place-name search go through the agent?** If her first response to "Lisbon airport" is slower than a geocoder, the client needs a local fast path that still writes to the log.
+8. **May Mira re-route a message the scope chip sent to the wrong place?** A user focused on the Porto strand may ask about lunch. If the server may move it to the thread, the target on `AppendEvent` is a hint; if not, it is binding.
+9. **Does brand approve a character built on its mark?** This spec assumes yes. Without approval the figure cannot ship as drawn.
