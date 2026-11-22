@@ -1,6 +1,6 @@
 # Mira, the map companion: product spec
 
-Status: draft for lead review, 2026-11-22. Chapter 3 is a stub for the lead.
+Status: draft for review, 2026-11-22. UI mocks and the character sheets: https://claude.ai/artifact/K31Jt8FNidngqVZU2gUf3Z
 Backend references: `docs/api-outline.md`, `proto/mira/v1/*.proto`.
 
 ## 1. Summary
@@ -21,7 +21,66 @@ Mira is an AI agent that lives on a mobile map as a small glowing figure at the 
 
 ## 3. The figure
 
-<!-- LEAD: character chapter goes here -->
+### 3.1 Who she is
+
+**Mira is a map pin that came alive.** A pin is a teardrop pointing down, stuck to one place. Turn it over and let it float, and it becomes a small flame of light that travels with you. That inversion is the whole product idea in one shape: a pin marks where you are going, Mira goes with you.
+
+The name carries two meanings. Mira is the star omicron Ceti, "the wonderful", the first star people saw brighten and fade, which is what the figure does. In Spanish, "¡mira!" means "look!", which is what a companion on a walk says.
+
+Her character is warm, curious and calm. She is a companion, and she does not perform for attention. If nothing is worth saying she says nothing, and the figure shows that by resting.
+
+### 3.2 Anatomy
+
+| Part | What it is | What it expresses |
+|---|---|---|
+| Belly | A round body of honey light (`#FFB627` to ember `#FF7A3D`) | Her presence. It is the only part that is always visible |
+| Tip | The curled point on top, the old pin point | Her mood and attention. It sways, perks, cocks like an ear, wags, and flops when she sleeps |
+| Face | Two ink dot eyes set low, a blush, a mouth that disappears at small sizes | Where she is looking. The eyes follow the direction of the pan |
+| Halo | A soft radial glow behind her | How much she is doing. Brightness and rhythm change with work; nothing else does |
+| Motes | Up to three small lights in orbit | One per running Task. The same motes appear beside each row in Ongoing |
+| Ring | A steady blue circle | It is the user's turn. Blue is the user's colour everywhere in the app |
+
+She ships at a 52 px body, top-centre, 58 px from the top edge, and never moves from there except at the Full detent, where she rides the sheet header. She scales to 24 px in a notification row, 120 px for voice and 240 px for brand use.
+
+### 3.3 Signature motion per state
+
+| State | Motion |
+|---|---|
+| Resting | Slow float and halo breath on a 4.8 s cycle, a lazy tip sway, a blink about every 5 s |
+| Noticing | Body leans and the face slides toward the pan, the tip trails behind, a sheen sweeps across the belly as the scan |
+| Working | Halo pulses on a 1.8 s beat, the tip ticks in time, one mote orbits per running Task |
+| Has-something | Brightest halo, a ring of short rays blooms once, a quick squash and perk, and the whisper unfurls beneath her |
+| Listening | Body widens, the tip cocks to one side, and two rings track voice amplitude |
+| Composing | **The flip.** She spins tip-down and is a pin again for a moment, pouring light from the tip onto the map, then pops back upright |
+| Needs-you | The blue ring appears and holds. She is almost still and looks straight out. Nothing pulses |
+| Delivered | Squash, hop, land, with smiling eyes and three small sparkles, played once |
+| Dimmed | Grey, almost no halo, sitting lower, eyes closed, tip flopped over |
+
+The flip is the gesture that ties the figure to the map. Every mark she places arrives along a thread of light from her tip, so the user sees where an answer came from and that it belongs to her.
+
+### 3.4 Motion principles
+
+1. **Light before motion.** Brightness is the first signal and movement the second. A state must be readable from the halo alone, which is also what the reduced-motion version shows.
+2. **One signal at a time.** She shows one state, chosen by the precedence below. Only the ring and the motes persist under other states.
+3. **She never bounces for attention.** No state loops a hop, a shake or a badge count. Delivered and Has-something play once and settle.
+4. **Slower than the map.** Her resting rhythms are slower than a pan, so she reads as calm next to the thing the user is moving.
+5. **Honest glow.** If she is reading the viewport or the location, she is visibly Noticing or Working. There is no silent mode in which she looks idle and is not.
+
+### 3.5 Colour
+
+Honey is Mira: her body, her marks on the map, her messages, and place references she makes. Blue (`#2F6BFF`) is the user: the location dot, the user's messages, and anything waiting on the user's decision. No other accent colours are used, and neither colour is the only signal for anything (see section 11).
+
+### 3.6 Directions considered
+
+Three figures were built and compared as animated studies at 240, 120 and 52 px on light and dusk maps.
+
+| Direction | What it gave | Why it was or was not chosen |
+|---|---|---|
+| A. Star-sprite, a plump star with rays | Warm, and the rays can form a compass | Reads as a familiar game star and sits close to the generic AI sparkle |
+| **B. The pin that came alive (chosen)** | One silhouette that is clear at 52 px, a tip that acts, and the flip | The only direction with a reason to live on a map |
+| C. Lantern creature, a round sprite with fins and a glowing belly | The most character and charm at large sizes | Too many parts at 52 px, and the glow is only a third of her body |
+
+### 3.7 States and signals
 
 | State | Trigger | What the user can do | Backing API signal |
 |---|---|---|---|
@@ -35,7 +94,7 @@ Mira is an AI agent that lives on a mobile map as a small glowing figure at the 
 | Delivered | A Task completes | Tap to open the result | `TaskUpdatePayload{COMPLETED}` |
 | Dimmed | Offline, paused, or location off | Long-press to resume or see what is off | Client-local. **Gap:** no server-side pause |
 
-The table forces two decisions. A Task in `WAITING_EXTERNAL` (a table watch that waits three days) does not pulse: Working means compute is happening now, so the watch is a parked mote on a Resting figure. A `FAILED` Task has no state of its own: we propose Has-something with a plain whisper and no hop.
+The table forces two decisions. A Task in `WAITING_EXTERNAL` (a table watch that waits three days) does not pulse: Working means compute is happening now, so the watch is a parked mote on a Resting figure. A `FAILED` Task has no state of its own: she shows Has-something with a plain whisper, without the bloom or the hop, and the tip drooped.
 
 When several states apply, the proposed precedence is Dimmed, Listening, Needs-you, Composing, Has-something, Noticing, Working, Resting. The Needs-you ring stays visible under any state shown above it.
 
@@ -240,5 +299,5 @@ Hard rules:
 4. **What does "evaporate" promise?** Leaving the shelf (proposed) or deletion from history. Deletion contradicts the append-only log and needs a retention rule.
 5. **Where are background location triggers evaluated?** On the device (geofences on saved places, private, capped by OS quotas) or on the server (flexible, uploads location while backgrounded). This decides whether scenario (d) works with the phone locked.
 6. **Who enforces the attention budget?** The server knows all pending items; the client knows whether the user is mid-gesture. A split needs a rule for which side may downgrade.
-7. **How does `FAILED` show on the figure?** The fixed vocabulary has no failure state. We propose Has-something; the character designers may want a distinct pose.
+7. **Is a drooped Has-something enough for `FAILED`?** Section 3 decides that failure reuses Has-something with a drooped tip and no bloom. If testing shows people miss failures, the vocabulary needs a tenth state.
 8. **Does a plain place-name search go through the agent?** With no search bar, "Lisbon airport" lands on Mira. If her first response is slower than a geocoder, the client needs a local fast path that still writes to the log.
