@@ -208,7 +208,7 @@ The log holds four kinds of entry.
 | Message | The user or Mira speaking | "Is it open Sunday?" "Yes, 11 to 4." |
 | Journey capsule | A live view of one goal: title, mote, latest line, canvas thumbnail, state word | "Weekend in Porto · 3 of 5 sorted · Needs you" |
 | Post | A journey's news: a result, a step, an approval request or a find. It names its journey | "From Table at Osteria Lume: 7:30 for two. Held until 6:00." |
-| Fold | Quick answers or a past day in one line. It deletes nothing | "Tue 3 Nov · Alder Quay · 2 journeys, 5 answers" |
+| Fold | Quick answers or a past day in one line. It deletes nothing | "Tue 3 Nov · Alder Quay · 2 topics, 5 answers" |
 
 The shelf is not an entry. It is a pinned view of the open decisions, and each decision's post stays in the log. A capsule's position never changes and its content is always current. It is never redrawn at the bottom for being active: that is the shelf's job.
 
