@@ -245,7 +245,7 @@ A journey has one of four *lifetimes*. They are internal vocabulary that sets at
 
 A Moment shows in the thread as its messages and later folds; browsing is one entry, not one per pan. The other lifetimes show a capsule and posts. A proactive find takes the lifetime of its journey, and is a Moment if it has none.
 
-A Moment becomes an Errand when Mira creates a Task for it or the user taps Keep, a button on every answer. An Errand becomes a Project when it spans a night or gains a second goal. Nothing becomes Standing silently: Mira asks first. A promoted Moment gains a capsule where its first message sits.
+Quick answers stay quick. Nothing is promoted silently. A Moment becomes an Errand in three cases: Mira keeps working on it (she creates a Task), the user replies to it later, or the user taps Keep. Reply is the quote-reply of any messaging app: a long-press on an answer offers Reply, Keep and Move, and a reply carries `reply_to_event_id`, which the API already has. From the reply on, the answer has a title and a capsule where its first message sits. An Errand becomes a Project when it spans a night or gains a second goal. Nothing becomes Standing silently: Mira asks first. A promoted Moment gains a capsule where its first message sits.
 
 A journey is in one of eleven states, and its state word says which in the journey's own terms ("Calling at 5").
 
@@ -254,6 +254,8 @@ A journey is in one of eleven states, and its state word says which in the journ
 - **Over:** done; failed (every attempt spent); lapsed (time ran out with no decision: "Hold expired"); ended (by the user, before the goal was met); stopped (a Standing journey, by the user).
 
 The mote beside the title shows state and nothing else. A capsule stays in the log in its last state.
+
+**Words people never see.** Journey, leaf, post, shelf, capsule and the four lifetime names are working vocabulary for this spec and the team. The interface shows titles ("Weekend in Porto"), state words ("Needs you") and familiar verbs (Reply, Keep, Move). The top layer is called Thread; a new one is a "New topic".
 
 ### 8.6 How the old terms map
 
@@ -357,7 +359,7 @@ A move cannot undo a committed consequential action. The receipt says so and off
 ## 13. Open questions
 
 1. **Does brand approve a character built on its mark?** This spec assumes yes. Without approval the figure cannot ship as drawn.
-2. **What promotes a quick answer to a journey?** We propose a Task or Keep. If Mira creates Tasks freely, every lookup gets a capsule; if rarely, work the user wanted back folds away.
+2. **Is reply-to-continue enough?** Section 8.5 decides that an answer lasts only if Mira keeps working, the user replies, or the user taps Keep. If testing shows people lose answers they wanted back, Keep needs to be more visible than a long-press.
 3. **How loud may a Standing journey be by default?** We propose thread only, with push opt-in per journey. If finds go unseen for days, the default needs one push.
 4. **Is the thread log ever pruned for the user?** Folds delete nothing, so the log grows for years. The server has a retention edge (`earliest_retained_seq`); a user-visible rule would decide what Earlier can search.
 5. **How much conversation shows by default?** This is our remaining disagreement with the response-canvas team. They would open on the canvas with no transcript; we open the thread at Half. A test of which opening lets people find long-running work would settle it.
